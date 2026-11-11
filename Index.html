@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Квест Маратика</title>
+<style>
+body{font-family:Arial;background:#111;color:#fff;text-align:center;padding:15px}
+h1{color:#ffcc00}.card{background:#222;border-radius:15px;padding:15px;margin:10px 0;text-align:left}
+button{width:100%;padding:13px;border:0;border-radius:10px;font-size:17px;font-weight:bold;background:#ffcc00;margin-top:8px}
+button:disabled{background:#555;color:#999}
+video{width:100%;border-radius:12px;background:#000}
+.done{opacity:.55}.timer{font-size:28px;color:#ffcc00;font-weight:bold}
+.lock{color:#ff5555}.ok{color:#33ff66}
+</style>
+</head>
+<body>
+<h1>🔥 КВЕСТ МАРАТИКА 🔥</h1>
+<p>Опыт: <b id="xp">0</b> | Выполнено квестов: <b id="quests">0</b></p>
+<p id="status">Нажми НАЧАТЬ, включи камеру и тренируйся</p>
+<video id="cam" autoplay muted playsinline></video>
+<div id="list"></div>
+<button id="finish" disabled>КВЕСТ ВЫПОЛНЕН +35</button>
+<button onclick="resetAll()" style="background:#444;color:#fff">СБРОСИТЬ ВСЁ С НУЛЯ</button>
+
+<script>
+const ex=[["Приседания",180],["Отжимания",180],["Подтягивания",180],["Пресс",180],["Планка",180],["Выпады",180],["Бёрпи",180]];
+let xp=+(localStorage.xp||0), qc=+(localStorage.qc||0), cur=0, left=0, timer=null, stream=null, lastFrame=null, noMove=0;
+document.getElementById('xp').textContent=xp;
+document.getElementById('quests').textContent=qc;
+
+function render(){
+ document.getElementById('list').innerHTML=ex.map((e,i)=>{
+  const locked=i>cur, done=i<cur;
+  return `<div class="card ${done?'done':''}">
+  <b>${i+1}. ${e[0]}</b> ${done?'✅':locked?'🔒':''}<br>
+  <span class="timer">${i===cur?fmt(left):fmt(e[1])}</span><br>
+  <span class="${locked?'lock':'ok'}">${done?'Сделано':locked?'Закрыто, сначала предыдущее':'Сейчас делаешь'}</span><br>
+  <input type="checkbox" ${done?'checked':''} disabled> Галочка откроется только после таймера и камеры
+  ${i===cur?`<button onclick="startQuest()">НАЧАТЬ</button>`:''}
+  </div>`}).join('');
+}
+function fmt(s){return Math.floor(s/60)+":"+String(s%60).padStart(2,'0')}
+async function startQuest(){
+ if(timer) return;
+ try{ stream=await navigator.mediaDevices.getUserMedia({video:true}); document.getElementById('cam').srcObject=stream; }
+ catch(e){ alert("Разреши камеру, брат, без неё таймер не пойдёт"); return; }
+ left=ex[cur][1]; noMove=0; render();
+ document.getElementById('status').textContent="Камера идёт. Двигайся, если уйдёшь, таймер встанет!";
+ timer=setInterval(()=>{
+   if(document.hidden){ document.getElementById('status').textContent="⛔ Свернул, таймер СТОП"; return; }
+   if(!stream||!stream.active){ document.getElementById('status').textContent="⛔ Камера выключена, таймер СТОП"; return; }
+   if(!hasMove()){ noMove++; document.getElementById('status').textContent="⛔ Тебя не видно / нет движения, таймер СТОП"; if(noMove>3) return; return; }
+   noMove=0; left--; render();
+   document.getElementById('status').textContent="🔥 Делаешь: "+ex[cur][0]+" | Осталось "+fmt(left);
+   if(left<=0){ clearInterval(timer); timer=null; stream.getTracks().forEach(t=>t.stop()); cur++;
+     if(cur>=ex.length){ document.getElementById('finish').disabled=false; document.getElementById('status').textContent="Всё, брат, жми КВЕСТ ВЫПОЛНЕН!"; }
+     else document.getElementById('status').textContent="Красавчик, следующее упражнение!";
+     render(); }
+ },1000);
+}
+function hasMove(){
+ const v=document.getElementById('cam'); if(!v.videoWidth) return false;
+ const c=document.createElement('canvas'); c.width=64; c.height=48;
+ const x=c.getContext('2d'); x.drawImage(v,0,0,64,48);
+ const d=x.getImageData(0,0,64,48).data; let diff=0;
+ if(lastFrame){ for(let i=0;i<d.length;i+=40){ diff+=Math.abs(d[i]-lastFrame[i]); } }
+ lastFrame=d; return diff>900;
+}
+document.getElementById('finish').onclick=()=>{
+ xp+=35; qc++; localStorage.xp=xp; localStorage.qc=qc;
+ document.getElementById('xp').textContent=xp; document.getElementById('quests').textContent=qc;
+ alert("Красавчик, брат! +35 опыта, по-честному!"); cur=0; document.getElementById('finish').disabled=true; render();
+};
+function resetAll(){ localStorage.clear(); xp=0; qc=0; cur=0; document.getElementById('xp').textContent=0; document.getElementById('quests').textContent=0; render(); }
+render();
+</script>
+</body>
+  </html>
